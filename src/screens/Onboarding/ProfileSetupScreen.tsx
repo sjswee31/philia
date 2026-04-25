@@ -42,7 +42,7 @@ export default function ProfileSetupScreen() {
     if (!user) return
     const updates = {
       name: name.trim() || user.name,
-      emoji, tone,
+      face,
       age: age ? parseInt(age) : undefined,
       bio: bio.trim() || undefined,
       instagram: instagram.trim() || undefined,
