@@ -212,17 +212,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ── Firebase-aware dispatch ────────────────────────────────────
   function appDispatch(action: Action) {
-    // Plan mutations in Firebase mode: write to Firestore only,
-    // let the onSnapshot listener update local state
-    const planMutations = ['ADD_PLAN', 'UPDATE_PLAN', 'ADD_CHAT_MESSAGE', 'JOIN_PLAN', 'REQUEST_JOIN', 'APPROVE_JOIN', 'DECLINE_JOIN']
-
-    if (firebaseEnabled && planMutations.includes(action.type)) {
+    // Always update local state immediately (optimistic),
+    // then also write to Firestore if enabled
+    dispatch(action)
+    if (firebaseEnabled) {
       writeToFirestore(action, state).catch(console.error)
-    } else {
-      dispatch(action)
-      if (firebaseEnabled) {
-        writeToFirestore(action, state).catch(console.error)
-      }
     }
   }
 
