@@ -27,7 +27,7 @@ export default function FaceEditor({ value, onChange, previewSize = 'lg' }: Face
           <Avatar face={face} size={previewSize} />
           <div className="min-w-0">
             <div className="font-display text-2xl text-ink">Build your face.</div>
-            <div className="text-ink-2 text-sm mt-1">Tune each part the way Notion does, with room for hats and extras.</div>
+            <div className="text-ink-2 text-sm mt-1">create your own personalized avatar</div>
           </div>
           <button
             type="button"
