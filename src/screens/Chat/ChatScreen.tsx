@@ -14,6 +14,8 @@ const STARTER_PROMPTS = [
   'I need to leave early',
 ]
 
+const BOT_THINKING_DELAY_MS = 700
+
 export default function ChatScreen() {
   const { planId } = useParams<{ planId: string }>()
   const navigate = useNavigate()
@@ -22,7 +24,6 @@ export default function ChatScreen() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [statusNote, setStatusNote] = useState('')
 
   const plan = state.plans.find(p => p.id === planId)
   const msgCount = plan?.chatMessages?.length ?? 0
@@ -140,7 +141,6 @@ export default function ChatScreen() {
     }
     dispatch({ type: 'ADD_CHAT_MESSAGE', planId: p.id, message: msg })
     setDraft('')
-    setStatusNote('')
 
     if (await handleLocalCommand(text)) {
       return
@@ -149,55 +149,42 @@ export default function ChatScreen() {
     setIsSending(true)
 
     try {
-      const ai = await generateMediatorResponse({
-        plan: p,
-        currentUser: u,
-        host: host ?? null,
-        members: memberProfiles,
-        isDMMode,
-        chatHistory: [...p.chatMessages, msg],
-        latestUserMessage: text,
-      })
+      const [ai] = await Promise.all([
+        generateMediatorResponse({
+          plan: p,
+          currentUser: u,
+          host: host ?? null,
+          members: memberProfiles,
+          isDMMode,
+          latestUserMessage: text,
+        }),
+        new Promise(resolve => window.setTimeout(resolve, BOT_THINKING_DELAY_MS)),
+      ])
 
-      dispatch({
-        type: 'ADD_CHAT_MESSAGE',
-        planId: p.id,
-        message: {
-          id: `bot_${generateId()}`,
-          senderId: 'bot',
-          content: ai.reply,
-          type: 'bot',
-          timestamp: new Date().toISOString(),
-          quickReplies: ai.quickReplies,
-        },
-      })
+      const relayAudience = ai.relayAudience || (isDMMode ? 'host' : 'group')
+      const relayMessage = ai.relayMessage || `${u.name} said: ${text}`
 
-      if (ai.shouldRelay && ai.relayMessage) {
+      if (ai.shouldRelay && relayMessage) {
         dispatch({
           type: 'ADD_CHAT_MESSAGE',
           planId: p.id,
           message: {
             id: `bot_${generateId()}`,
             senderId: 'bot',
-            content: `Relayed to ${ai.relayAudience || (isDMMode ? 'host' : 'group')}: ${ai.relayMessage}`,
+            content: `Sent to ${relayAudience}:\n"${relayMessage}"`,
             type: 'bot',
             timestamp: new Date().toISOString(),
           },
         })
       }
-
-      if (ai.source === 'fallback') {
-        setStatusNote('AI is not connected yet, so the chat is using local fallback replies.')
-      }
     } catch {
-      setStatusNote('The chatbot could not respond right now. Check your Ollama or API setup and try again.')
       dispatch({
         type: 'ADD_CHAT_MESSAGE',
         planId: p.id,
         message: {
           id: `bot_${generateId()}`,
           senderId: 'bot',
-          content: 'I hit a connection issue while trying to draft that relay. Please try again in a moment.',
+          content: 'I could not clean that up just now, so nothing was sent.',
           type: 'bot',
           timestamp: new Date().toISOString(),
         },
@@ -207,12 +194,10 @@ export default function ChatScreen() {
     }
   }
 
-  const suggestionChips = p.chatMessages[p.chatMessages.length - 1]?.quickReplies?.length
-    ? p.chatMessages[p.chatMessages.length - 1].quickReplies!
-    : STARTER_PROMPTS
+  const suggestionChips = STARTER_PROMPTS
 
   return (
-    <div className="h-full bg-paper flex flex-col">
+    <div className="h-full min-h-0 bg-paper flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 px-4 bg-white" style={{ paddingTop: 52, paddingBottom: 12, borderBottom: '1.4px solid var(--line)' }}>
         <div className="flex items-center gap-3">
@@ -239,7 +224,7 @@ export default function ChatScreen() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-8 space-y-3">
         {p.chatMessages.map(msg => (
           <ChatBubble key={msg.id} msg={msg} currentUserId={u.id} onQuickReply={sendMessage} />
         ))}
@@ -265,11 +250,14 @@ export default function ChatScreen() {
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-24 shrink-0" />
       </div>
 
       {/* Input area */}
-      <div className="flex-shrink-0 bg-white px-4 pb-6 pt-3" style={{ borderTop: '1.4px solid var(--line)' }}>
+      <div
+        className="flex-shrink-0 bg-white px-4 pt-3"
+        style={{ borderTop: '1.4px solid var(--line)', paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
             <div className="text-ink-2 text-xs font-mono-sm">MESSAGE PHILIA BOT</div>
@@ -317,13 +305,8 @@ export default function ChatScreen() {
           </div>
 
           <div className="text-ink-2 text-xs mt-2">
-            Share delays, concerns, dietary notes, or anything you want passed along without direct messaging.
+            Type what you want passed along and the bot will relay a cleaner version to the group.
           </div>
-          {statusNote && (
-            <div className="text-[11px] mt-2" style={{ color: 'var(--accent)' }}>
-              {statusNote}
-            </div>
-          )}
         </div>
       </div>
     </div>
