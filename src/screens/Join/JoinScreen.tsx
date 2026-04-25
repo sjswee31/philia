@@ -6,6 +6,7 @@ import PhiliaMap from '../../components/map/PhiliaMap'
 import { PlanCard, SectionLabel, Pill } from '../../components/ui'
 import { rankPlans } from '../../lib/matchScore'
 import { FOOD_PREF_OPTIONS } from '../../lib/constants'
+import { useGeolocation } from '../../lib/useGeolocation'
 import type { Plan } from '../../types'
 
 type ViewMode = 'split' | 'map' | 'list'
@@ -14,6 +15,7 @@ export default function JoinScreen() {
   const navigate = useNavigate()
   const user = useCurrentUser()
   const plans = usePlans()
+  const userLocation = useGeolocation()
 
   const [view, setView] = useState<ViewMode>('split')
   const [query, setQuery] = useState('')
@@ -95,6 +97,7 @@ export default function JoinScreen() {
               setSelectedPlan(plan)
               if (view === 'map') setView('split')
             }}
+            currentUserLocation={userLocation ?? undefined}
           />
           {view === 'map' && (
             <div className="absolute top-16 right-3">

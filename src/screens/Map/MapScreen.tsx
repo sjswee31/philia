@@ -6,12 +6,14 @@ import PhiliaMap from '../../components/map/PhiliaMap'
 import { Avatar, PlanCard } from '../../components/ui'
 import { MOCK_USERS } from '../../lib/mockData'
 import { formatCountdown, spotsLeft } from '../../lib/utils'
+import { useGeolocation } from '../../lib/useGeolocation'
 import type { Plan } from '../../types'
 
 export default function MapScreen() {
   const navigate = useNavigate()
   const plans = usePlans()
   const user = useCurrentUser()
+  const userLocation = useGeolocation()
 
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [showList, setShowList] = useState(false)
@@ -25,6 +27,7 @@ export default function MapScreen() {
       <PhiliaMap
         plans={openPlans}
         onPinClick={(plan) => { setSelectedPlan(plan); setShowList(false) }}
+        currentUserLocation={userLocation ?? undefined}
       />
 
       {/* Top chrome */}
