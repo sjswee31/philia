@@ -5,11 +5,7 @@ export interface MediatorResponse {
   relayAudience?: string
   relayMessage?: string
   quickReplies: string[]
-<<<<<<< Updated upstream
-  source: 'ollama' | 'openai' | 'claude' | 'fallback'
-=======
   source: 'local'
->>>>>>> Stashed changes
 }
 
 interface MediatorArgs {
@@ -50,7 +46,7 @@ function paraphraseMessage(message: string, currentUser: UserProfile, host: User
   if (/(shy|awkward|nervous|anxious|introvert)/.test(lowered)) {
     return {
       relayAudience: audience,
-      relayMessage: 'First time meeting — would appreciate a welcoming vibe.',
+      relayMessage: 'First time meeting - would appreciate a welcoming vibe.',
       quickReplies: ['Please keep it low-pressure', 'I may be quiet at first', 'Thanks for understanding'],
     }
   }
@@ -115,61 +111,17 @@ function paraphraseMessage(message: string, currentUser: UserProfile, host: User
   }
 }
 
-async function requestClaude(messages: ChatRequestMessage[]): Promise<MediatorResponse> {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('Missing Anthropic API key')
-
-  const system = messages.find(m => m.role === 'system')?.content ?? ''
-  const conversation = messages.filter(m => m.role !== 'system')
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system,
-      messages: conversation,
-    }),
-  })
-
-  if (!response.ok) throw new Error(`Anthropic request failed with ${response.status}`)
-
-  const data = await response.json() as { content?: Array<{ text?: string }> }
-  const content = data.content?.[0]?.text
-  if (!content) throw new Error('Anthropic returned an empty response')
-
-  return parseMediatorResponse(content, 'claude')
-}
-
 export async function generateMediatorResponse(args: MediatorArgs): Promise<MediatorResponse> {
   void args.plan
   void args.members
 
   const result = paraphraseMessage(args.latestUserMessage, args.currentUser, args.host, args.isDMMode)
 
-<<<<<<< Updated upstream
-    if (import.meta.env.VITE_ANTHROPIC_API_KEY) {
-      return await requestClaude(messages)
-    }
-
-    if (import.meta.env.VITE_OPENAI_API_KEY) {
-      return await requestOpenAI(messages)
-    }
-  } catch (error) {
-    console.warn('Mediator AI request failed, falling back to local logic.', error)
-=======
   return {
     shouldRelay: true,
     relayAudience: result.relayAudience,
     relayMessage: result.relayMessage,
     quickReplies: result.quickReplies,
     source: 'local',
->>>>>>> Stashed changes
   }
 }
