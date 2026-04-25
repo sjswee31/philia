@@ -6,7 +6,6 @@ import ProfileSetupScreen from './screens/Onboarding/ProfileSetupScreen'
 import HomeScreen from './screens/Home/HomeScreen'
 import StartPlanScreen from './screens/Start/StartPlanScreen'
 import JoinScreen from './screens/Join/JoinScreen'
-import MapScreen from './screens/Map/MapScreen'
 import GroupDetailScreen from './screens/GroupDetail/GroupDetailScreen'
 import ChatScreen from './screens/Chat/ChatScreen'
 import ProfileScreen from './screens/Profile/ProfileScreen'
@@ -35,7 +34,6 @@ export default function App() {
           <Route path="/home" element={<RequireAuth><HomeScreen /></RequireAuth>} />
           <Route path="/start" element={<RequireAuth><StartPlanScreen /></RequireAuth>} />
           <Route path="/join" element={<RequireAuth><JoinScreen /></RequireAuth>} />
-          <Route path="/map" element={<RequireAuth><MapScreen /></RequireAuth>} />
           <Route path="/plan/:id" element={<RequireAuth><GroupDetailScreen /></RequireAuth>} />
           <Route path="/chat/:planId" element={<RequireAuth><ChatScreen /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><ProfileScreen /></RequireAuth>} />
