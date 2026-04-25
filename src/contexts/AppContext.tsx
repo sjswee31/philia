@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
 import type { UserProfile, Plan, ChatMessage } from '../types'
 import { MOCK_USERS, MOCK_PLANS } from '../lib/mockData'
+import { firebaseEnabled, auth, db } from '../lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import {
+  collection, doc, setDoc, updateDoc, onSnapshot, getDoc, arrayUnion, arrayRemove,
+} from 'firebase/firestore'
 
 interface AppState {
   currentUser: UserProfile | null
@@ -14,6 +19,8 @@ type Action =
   | { type: 'SET_FIREBASE_USER'; uid: string; profile: UserProfile | null }
   | { type: 'SET_CURRENT_USER'; user: UserProfile }
   | { type: 'UPDATE_CURRENT_USER'; updates: Partial<UserProfile> }
+  | { type: 'SET_PLANS'; plans: Plan[] }
+  | { type: 'SET_USERS'; users: UserProfile[] }
   | { type: 'ADD_PLAN'; plan: Plan }
   | { type: 'UPDATE_PLAN'; planId: string; updates: Partial<Plan> }
   | { type: 'ADD_CHAT_MESSAGE'; planId: string; message: ChatMessage }
@@ -35,6 +42,12 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_CURRENT_USER':
       if (!state.currentUser) return state
       return { ...state, currentUser: { ...state.currentUser, ...action.updates } }
+
+    case 'SET_PLANS':
+      return { ...state, plans: action.plans }
+
+    case 'SET_USERS':
+      return { ...state, users: action.users }
 
     case 'ADD_PLAN':
       return { ...state, plans: [action.plan, ...state.plans] }
@@ -125,13 +138,11 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-const STORAGE_KEY = 'philia_user_profile'
-
 const initialState: AppState = {
   currentUser: null,
   firebaseUid: null,
   users: MOCK_USERS,
-  plans: MOCK_PLANS,
+  plans: firebaseEnabled ? [] : MOCK_PLANS,
   isLoading: true,
 }
 
@@ -143,29 +154,160 @@ const AppContext = createContext<{
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
-  // Load persisted profile on mount (demo mode — no real Firebase Firestore needed)
+  // ── Auth listener ──────────────────────────────────────────────
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        const profile: UserProfile = JSON.parse(stored)
-        dispatch({ type: 'SET_FIREBASE_USER', uid: profile.id, profile })
-      } catch {
+    if (!firebaseEnabled) {
+      const stored = localStorage.getItem('philia_user_profile')
+      if (stored) {
+        try {
+          const profile: UserProfile = JSON.parse(stored)
+          dispatch({ type: 'SET_FIREBASE_USER', uid: profile.id, profile })
+        } catch {
+          dispatch({ type: 'SET_LOADING', value: false })
+        }
+      } else {
         dispatch({ type: 'SET_LOADING', value: false })
       }
-    } else {
-      dispatch({ type: 'SET_LOADING', value: false })
+      return
     }
+
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const snap = await getDoc(doc(db, 'users', fbUser.uid))
+        const profile = snap.exists() ? (snap.data() as UserProfile) : null
+        dispatch({ type: 'SET_FIREBASE_USER', uid: fbUser.uid, profile })
+      } else {
+        dispatch({ type: 'SET_LOADING', value: false })
+      }
+    })
+    return unsub
   }, [])
 
-  // Persist current user whenever it changes
+  // ── Real-time plans listener ───────────────────────────────────
   useEffect(() => {
-    if (state.currentUser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.currentUser))
+    if (!firebaseEnabled) return
+    const unsub = onSnapshot(collection(db, 'plans'), (snap) => {
+      const plans = snap.docs.map(d => d.data() as Plan)
+      dispatch({ type: 'SET_PLANS', plans })
+    })
+    return unsub
+  }, [])
+
+  // ── Real-time users listener ───────────────────────────────────
+  useEffect(() => {
+    if (!firebaseEnabled) return
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      const users = snap.docs.map(d => d.data() as UserProfile)
+      dispatch({ type: 'SET_USERS', users })
+    })
+    return unsub
+  }, [])
+
+  // ── Persist demo user to localStorage (demo mode only) ─────────
+  useEffect(() => {
+    if (!firebaseEnabled && state.currentUser) {
+      localStorage.setItem('philia_user_profile', JSON.stringify(state.currentUser))
     }
   }, [state.currentUser])
 
-  return <AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>
+  // ── Firebase-aware dispatch ────────────────────────────────────
+  function appDispatch(action: Action) {
+    // Plan mutations in Firebase mode: write to Firestore only,
+    // let the onSnapshot listener update local state
+    const planMutations = ['ADD_PLAN', 'UPDATE_PLAN', 'ADD_CHAT_MESSAGE', 'JOIN_PLAN', 'REQUEST_JOIN', 'APPROVE_JOIN', 'DECLINE_JOIN']
+
+    if (firebaseEnabled && planMutations.includes(action.type)) {
+      writeToFirestore(action, state).catch(console.error)
+    } else {
+      dispatch(action)
+      if (firebaseEnabled) {
+        writeToFirestore(action, state).catch(console.error)
+      }
+    }
+  }
+
+  return <AppContext.Provider value={{ state, dispatch: appDispatch as React.Dispatch<Action> }}>{children}</AppContext.Provider>
+}
+
+async function writeToFirestore(action: Action, state: AppState) {
+  if (!firebaseEnabled) return
+
+  switch (action.type) {
+    case 'ADD_PLAN':
+      await setDoc(doc(db, 'plans', action.plan.id), action.plan)
+      break
+
+    case 'UPDATE_PLAN':
+      await updateDoc(doc(db, 'plans', action.planId), action.updates as Record<string, unknown>)
+      break
+
+    case 'ADD_CHAT_MESSAGE':
+      await updateDoc(doc(db, 'plans', action.planId), {
+        chatMessages: arrayUnion(action.message),
+      })
+      break
+
+    case 'JOIN_PLAN': {
+      const plan = state.plans.find(p => p.id === action.planId)
+      if (!plan) break
+      const members = [...plan.members, action.userId]
+      const status = members.length >= plan.groupSize ? 'full' : 'open'
+      const userName = state.users.find(u => u.id === action.userId)?.name ?? 'Someone'
+      const botMsg: ChatMessage = {
+        id: `bot_${Date.now()}`,
+        senderId: 'bot',
+        content: `${userName} just joined the table! ${members.length}/${plan.groupSize} confirmed.`,
+        type: 'bot',
+        timestamp: new Date().toISOString(),
+      }
+      await updateDoc(doc(db, 'plans', action.planId), {
+        members: arrayUnion(action.userId),
+        status,
+        chatMessages: arrayUnion(botMsg),
+      })
+      break
+    }
+
+    case 'REQUEST_JOIN':
+      await updateDoc(doc(db, 'plans', action.planId), {
+        joinRequests: arrayUnion(action.userId),
+      })
+      break
+
+    case 'APPROVE_JOIN': {
+      const plan = state.plans.find(p => p.id === action.planId)
+      if (!plan) break
+      const members = [...plan.members, action.userId]
+      const status = members.length >= plan.groupSize ? 'full' : 'open'
+      const userName = state.users.find(u => u.id === action.userId)?.name ?? 'Someone'
+      const botMsg: ChatMessage = {
+        id: `bot_${Date.now()}`,
+        senderId: 'bot',
+        content: `${userName} was approved! ${members.length}/${plan.groupSize} confirmed.`,
+        type: 'bot',
+        timestamp: new Date().toISOString(),
+      }
+      await updateDoc(doc(db, 'plans', action.planId), {
+        members: arrayUnion(action.userId),
+        joinRequests: arrayRemove(action.userId),
+        status,
+        chatMessages: arrayUnion(botMsg),
+      })
+      break
+    }
+
+    case 'DECLINE_JOIN':
+      await updateDoc(doc(db, 'plans', action.planId), {
+        joinRequests: arrayRemove(action.userId),
+      })
+      break
+
+    case 'UPDATE_CURRENT_USER': {
+      if (!state.currentUser) break
+      await updateDoc(doc(db, 'users', state.currentUser.id), action.updates as Record<string, unknown>)
+      break
+    }
+  }
 }
 
 export function useApp() {

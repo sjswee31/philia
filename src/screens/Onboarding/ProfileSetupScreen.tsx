@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { doc, setDoc } from 'firebase/firestore'
+import { db, firebaseEnabled } from '../../lib/firebase'
 import { useApp, useCurrentUser } from '../../contexts/AppContext'
 import { Avatar, Btn, Pill } from '../../components/ui'
 import { FOOD_PREF_OPTIONS, VIBE_TAG_OPTIONS, EMOJI_OPTIONS, TONE_OPTIONS } from '../../lib/constants'
@@ -34,22 +36,23 @@ export default function ProfileSetupScreen() {
     setVibeTags(p => p.includes(tag) ? p.filter(x => x !== tag) : [...p, tag])
   }
 
-  function finish() {
+  async function finish() {
     if (!user) return
-    dispatch({
-      type: 'UPDATE_CURRENT_USER',
-      updates: {
-        name: name.trim() || user.name,
-        emoji, tone,
-        age: age ? parseInt(age) : undefined,
-        bio: bio.trim() || undefined,
-        instagram: instagram.trim() || undefined,
-        snapchat: snapchat.trim() || undefined,
-        tiktok: tiktok.trim() || undefined,
-        foodPrefs, vibeTags, budget,
-        isOnboarded: true,
-      },
-    })
+    const updates = {
+      name: name.trim() || user.name,
+      emoji, tone,
+      age: age ? parseInt(age) : undefined,
+      bio: bio.trim() || undefined,
+      instagram: instagram.trim() || undefined,
+      snapchat: snapchat.trim() || undefined,
+      tiktok: tiktok.trim() || undefined,
+      foodPrefs, vibeTags, budget,
+      isOnboarded: true,
+    }
+    if (firebaseEnabled) {
+      await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
+    }
+    dispatch({ type: 'UPDATE_CURRENT_USER', updates })
     navigate('/home')
   }
 
