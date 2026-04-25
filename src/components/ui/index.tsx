@@ -1,6 +1,14 @@
 import React from 'react'
-import { normalizeFace } from '../../lib/faces'
+import { normalizeFace, randomFace } from '../../lib/faces'
 import type { AvatarFaceInput, AvatarFaceConfig } from '../../lib/faces'
+
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
+}
 
 // ...existing code...
 
@@ -261,28 +269,18 @@ function EyewearLayer({ eyewear, line }: { eyewear: AvatarFaceConfig['eyewear'];
   )
 }
 
-export function Avatar({ emoji, tone, face, photo, size = 'md', className = '', style }: AvatarProps) {
+export function Avatar({ emoji, tone: _tone, face, photo, size = 'md', className = '', style }: AvatarProps) {
   const dims = size === 'sm' ? 'w-7 h-7 text-sm rounded-md' : size === 'lg' ? 'w-16 h-16 text-3xl rounded-xl' : 'w-9 h-9 text-lg rounded-lg'
 
   if (photo) {
     return <img src={photo} className={`${dims} object-cover border border-line ${className}`} alt="avatar" style={{ borderWidth: '1.4px', ...style }} />
   }
 
-  if (face) {
-    const px = size === 'sm' ? 28 : size === 'lg' ? 64 : 36
-    return (
-      <div className={`${dims} flex items-center justify-center border flex-shrink-0 ${className}`} style={{ borderColor: 'var(--line)', borderWidth: '1.4px', background: '#fff', ...style }}>
-        <FaceSvg face={face} size={px} />
-      </div>
-    )
-  }
-
+  const resolvedFace = face ?? randomFace(emoji ? hashString(emoji) : 0)
+  const px = size === 'sm' ? 28 : size === 'lg' ? 64 : 36
   return (
-    <div
-      className={`${dims} flex items-center justify-center border flex-shrink-0 ${className}`}
-      style={{ background: tone ?? '#F3EEE7', borderColor: 'var(--line)', borderWidth: '1.4px', ...style }}
-    >
-      {emoji ?? '🙂'}
+    <div className={`${dims} flex items-center justify-center border flex-shrink-0 ${className}`} style={{ borderColor: 'var(--line)', borderWidth: '1.4px', background: '#fff', ...style }}>
+      <FaceSvg face={resolvedFace} size={px} />
     </div>
   )
 }
