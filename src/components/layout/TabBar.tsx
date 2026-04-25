@@ -3,7 +3,6 @@ import { useApp } from '../../contexts/AppContext'
 
 const tabs = [
   { path: '/home', label: 'Home',    icon: HomeIcon },
-  { path: '/map',  label: 'Map',     icon: MapIcon },
   { path: '/join', label: 'Join',    icon: SearchIcon },
   { path: '/profile', label: 'Me',  icon: UserIcon },
 ]
@@ -50,15 +49,6 @@ function HomeIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/>
-    </svg>
-  )
-}
-function MapIcon({ active }: { active: boolean }) {
-  const c = active ? 'var(--accent)' : 'var(--ink-2)'
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="3,6 9,3 15,6 21,3 21,18 15,21 9,18 3,21"/>
-      <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
     </svg>
   )
 }
