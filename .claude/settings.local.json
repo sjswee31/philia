@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Read(//private/tmp/**)",
+      "Bash(cp /Users/sarahswee/.claude/projects/-Users-sarahswee-Downloads-philia/06c82ae4-28a3-4dd6-aef8-62d6514cf1eb/tool-results/webfetch-1777142747270-ke5euf.bin design_bundle.tar.gz)",
+      "Bash(tar -tzf design_bundle.tar.gz)",
+      "Bash(tar -xzf design_bundle.tar.gz)",
+      "Read(//tmp/philia/**)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5173)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git add *)"
+    ]
+  }
+}
