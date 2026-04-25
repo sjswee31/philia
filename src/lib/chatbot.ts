@@ -13,7 +13,7 @@ export interface MediatorResponse {
   relayAudience?: string
   relayMessage?: string
   quickReplies: string[]
-  source: 'ollama' | 'openai' | 'fallback'
+  source: 'ollama' | 'openai' | 'claude' | 'fallback'
 }
 
 interface MediatorArgs {
@@ -234,12 +234,48 @@ function buildFallbackResponse({ currentUser, host, isDMMode, latestUserMessage 
   }
 }
 
+async function requestClaude(messages: ChatRequestMessage[]): Promise<MediatorResponse> {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('Missing Anthropic API key')
+
+  const system = messages.find(m => m.role === 'system')?.content ?? ''
+  const conversation = messages.filter(m => m.role !== 'system')
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system,
+      messages: conversation,
+    }),
+  })
+
+  if (!response.ok) throw new Error(`Anthropic request failed with ${response.status}`)
+
+  const data = await response.json() as { content?: Array<{ text?: string }> }
+  const content = data.content?.[0]?.text
+  if (!content) throw new Error('Anthropic returned an empty response')
+
+  return parseMediatorResponse(content, 'claude')
+}
+
 export async function generateMediatorResponse(args: MediatorArgs): Promise<MediatorResponse> {
   const messages = buildConversation(args)
 
   try {
     if (import.meta.env.VITE_OLLAMA_MODEL || import.meta.env.VITE_OLLAMA_URL) {
       return await requestOllama(messages)
+    }
+
+    if (import.meta.env.VITE_ANTHROPIC_API_KEY) {
+      return await requestClaude(messages)
     }
 
     if (import.meta.env.VITE_OPENAI_API_KEY) {
