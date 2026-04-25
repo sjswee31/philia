@@ -49,10 +49,14 @@ export default function ProfileSetupScreen() {
       foodPrefs, vibeTags, budget,
       isOnboarded: true,
     }
-    if (firebaseEnabled) {
-      await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
-    }
     dispatch({ type: 'UPDATE_CURRENT_USER', updates })
+    if (firebaseEnabled) {
+      try {
+        await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
+      } catch (e) {
+        console.error('Failed to save profile to Firestore:', e)
+      }
+    }
     navigate('/home')
   }
 
