@@ -117,7 +117,7 @@ export default function GroupDetailScreen() {
                 {requestProfiles.map(u => u && (
                   <div key={u.id} className="wk-box p-3 flex items-center gap-3">
                     <button onClick={() => navigate(`/profile/${u.id}`)}>
-                      <Avatar emoji={u.emoji} tone={u.tone} />
+                      <Avatar emoji={u.emoji} tone={u.tone} face={u.face} />
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-sm">{u.name}</div>
@@ -140,7 +140,7 @@ export default function GroupDetailScreen() {
               {memberProfiles.map(u => u && (
                 <div key={u.id} className="flex items-center gap-3">
                   <button onClick={() => navigate(`/profile/${u.id}`)}>
-                    <Avatar emoji={u.emoji} tone={u.tone} />
+                    <Avatar emoji={u.emoji} tone={u.tone} face={u.face} />
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm">{u.name}{u.id === plan.hostId ? ' (host)' : ''}</div>

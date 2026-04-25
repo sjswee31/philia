@@ -41,7 +41,7 @@ export default function HomeScreen() {
             <div className="font-display text-2xl text-ink mt-0.5">{greeting}, {user.name.split(' ')[0]}.</div>
           </div>
           <button onClick={() => navigate('/profile')} className="active:scale-90 transition-transform">
-            <Avatar emoji={user.emoji} tone={user.tone} photo={user.photo} />
+            <Avatar emoji={user.emoji} tone={user.tone} face={user.face} photo={user.photo} />
           </button>
         </div>
 
@@ -106,7 +106,7 @@ export default function HomeScreen() {
             {/* Mini avatar stack */}
             <div className="flex mt-2 -space-x-2">
               {MOCK_USERS.slice(0, 4).map(u => (
-                <Avatar key={u.id} emoji={u.emoji} tone={u.tone} size="sm" className="border-white" style={{ borderColor: '#fff' } as React.CSSProperties} />
+                <Avatar key={u.id} emoji={u.emoji} tone={u.tone} face={u.face} size="sm" className="border-white" style={{ borderColor: '#fff' } as React.CSSProperties} />
               ))}
               <div className="w-7 h-7 rounded-md flex items-center justify-center text-[9px] text-ink-2 font-bold" style={{ background: '#f0ebe3', border: '1.4px solid var(--line)' }}>
                 +{Math.max(0, openPlans.reduce((s, p) => s + p.members.length, 0) - 4)}
@@ -144,7 +144,7 @@ export default function HomeScreen() {
             <div className="flex gap-3 mt-2 overflow-x-auto pb-1">
               {(pastConnections.length > 0 ? pastConnections : MOCK_USERS.slice(0, 5)).map(u => u && (
                 <button key={u.id} onClick={() => navigate(`/profile/${u.id}`)} className="flex flex-col items-center gap-1 flex-shrink-0 active:scale-95 transition-transform">
-                  <Avatar emoji={u.emoji} tone={u.tone} />
+                  <Avatar emoji={u.emoji} tone={u.tone} face={u.face} />
                   <span className="text-xs text-ink-2">{u.name.split(' ')[0]}</span>
                 </button>
               ))}

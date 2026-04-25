@@ -4,9 +4,11 @@ import { signOut } from 'firebase/auth'
 import { auth, firebaseEnabled } from '../../lib/firebase'
 import { useCurrentUser, useApp } from '../../contexts/AppContext'
 import TabBar from '../../components/layout/TabBar'
-import { Avatar, ReliabilityRing, Pill, Chip, SectionLabel, Divider, Btn } from '../../components/ui'
+import { Avatar, ReliabilityRing, Pill, Chip, SectionLabel, Divider } from '../../components/ui'
+import FaceEditor from '../../components/ui/FaceEditor'
 import { MOCK_USERS } from '../../lib/mockData'
-import { FOOD_PREF_OPTIONS, VIBE_TAG_OPTIONS, EMOJI_OPTIONS, TONE_OPTIONS } from '../../lib/constants'
+import { FOOD_PREF_OPTIONS, VIBE_TAG_OPTIONS } from '../../lib/constants'
+import { DEFAULT_FACE, normalizeFace } from '../../lib/faces'
 
 export default function ProfileScreen() {
   const navigate = useNavigate()
@@ -17,14 +19,37 @@ export default function ProfileScreen() {
   const [instagram, setInstagram] = useState(user?.instagram ?? '')
   const [snapchat, setSnapchat] = useState(user?.snapchat ?? '')
   const [tiktok, setTiktok] = useState(user?.tiktok ?? '')
+  const [face, setFace] = useState(() => normalizeFace(user?.face ?? DEFAULT_FACE))
   const [foodPrefs, setFoodPrefs] = useState<string[]>(user?.foodPrefs ?? [])
   const [vibeTags, setVibeTags] = useState<string[]>(user?.vibeTags ?? [])
   const [budget, setBudget] = useState<'$' | '$$' | '$$$'>(user?.budget ?? '$$')
 
   if (!user) return null
+  const currentUser = user
 
   function saveEdits() {
-    dispatch({ type: 'UPDATE_CURRENT_USER', updates: { bio, instagram, snapchat, tiktok, foodPrefs, vibeTags, budget } })
+    dispatch({ type: 'UPDATE_CURRENT_USER', updates: { bio, instagram, snapchat, tiktok, face, foodPrefs, vibeTags, budget } })
+    setEditing(false)
+  }
+
+  function syncFormFromUser() {
+    setBio(currentUser.bio ?? '')
+    setInstagram(currentUser.instagram ?? '')
+    setSnapchat(currentUser.snapchat ?? '')
+    setTiktok(currentUser.tiktok ?? '')
+    setFace(normalizeFace(currentUser.face ?? DEFAULT_FACE))
+    setFoodPrefs(currentUser.foodPrefs ?? [])
+    setVibeTags(currentUser.vibeTags ?? [])
+    setBudget(currentUser.budget ?? '$$')
+  }
+
+  function startEditing() {
+    syncFormFromUser()
+    setEditing(true)
+  }
+
+  function cancelEditing() {
+    syncFormFromUser()
     setEditing(false)
   }
 
@@ -54,11 +79,11 @@ export default function ProfileScreen() {
           <div className="flex gap-2">
             {editing ? (
               <>
-                <button onClick={() => setEditing(false)} className="wk-pill text-xs">cancel</button>
+                <button onClick={cancelEditing} className="wk-pill text-xs">cancel</button>
                 <button onClick={saveEdits} className="wk-pill wk-pill-accent text-xs" style={{ color: '#fff' }}>save</button>
               </>
             ) : (
-              <button onClick={() => setEditing(true)} className="wk-pill text-xs">edit</button>
+              <button onClick={startEditing} className="wk-pill text-xs">edit</button>
             )}
           </div>
         </div>
@@ -66,18 +91,9 @@ export default function ProfileScreen() {
         {/* Hero */}
         <div className="mt-2">
           {editing ? (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {EMOJI_OPTIONS.map((e, i) => (
-                <button key={e} onClick={() => dispatch({ type: 'UPDATE_CURRENT_USER', updates: { emoji: e, tone: TONE_OPTIONS[i % TONE_OPTIONS.length] } })}
-                  className={`transition-transform active:scale-90 ${user.emoji === e ? 'scale-110' : ''}`}
-                  style={{ outline: user.emoji === e ? '2.5px solid var(--accent)' : 'none', borderRadius: 10 }}
-                >
-                  <Avatar emoji={e} tone={TONE_OPTIONS[i % TONE_OPTIONS.length]} />
-                </button>
-              ))}
-            </div>
+            <FaceEditor value={face} onChange={setFace} />
           ) : (
-            <Avatar emoji={user.emoji} tone={user.tone} photo={user.photo} size="lg" />
+            <Avatar face={user.face} emoji={user.emoji} tone={user.tone} photo={user.photo} size="lg" />
           )}
           <div className="font-display text-3xl mt-3">{user.name}</div>
           {user.age && <div className="text-ink-2 text-sm mt-0.5">{user.age} · {user.isVerified ? 'verified' : 'unverified'}</div>}
@@ -222,7 +238,7 @@ export default function ProfileScreen() {
           <div className="flex flex-wrap gap-3 mt-2">
             {displayConnections.map(u => u && (
               <button key={u.id} onClick={() => navigate(`/profile/${u.id}`)} className="flex flex-col items-center gap-1 active:scale-90 transition-transform">
-                <Avatar emoji={u.emoji} tone={u.tone} />
+                <Avatar emoji={u.emoji} tone={u.tone} face={u.face} />
                 <span className="text-xs text-ink-2">{u.name.split(' ')[0]}</span>
               </button>
             ))}

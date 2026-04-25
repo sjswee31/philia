@@ -233,7 +233,7 @@ export default function ChatScreen() {
         </div>
         {!isDMMode && (
           <div className="flex gap-1.5 mt-2.5">
-            {memberProfiles.map(u => u && <Avatar key={u.id} emoji={u.emoji} tone={u.tone} size="sm" />)}
+            {memberProfiles.map(u => u && <Avatar key={u.id} emoji={u.emoji} tone={u.tone} face={u.face} size="sm" />)}
           </div>
         )}
       </div>
@@ -343,7 +343,7 @@ function ChatBubble({ msg, currentUserId, onQuickReply }: {
     <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
       {sender && (
         <div className="flex items-center gap-1.5 mb-1">
-          <Avatar emoji={sender.emoji} tone={sender.tone} size="sm" />
+          <Avatar emoji={sender.emoji} tone={sender.tone} face={sender.face} size="sm" />
           <span className="text-ink-2 text-xs">{sender.name}</span>
         </div>
       )}

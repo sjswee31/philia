@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { doc, setDoc } from 'firebase/firestore'
 import { db, firebaseEnabled } from '../../lib/firebase'
 import { useApp, useCurrentUser } from '../../contexts/AppContext'
-import { Avatar, Btn, Pill } from '../../components/ui'
-import { FOOD_PREF_OPTIONS, VIBE_TAG_OPTIONS, EMOJI_OPTIONS, TONE_OPTIONS } from '../../lib/constants'
+import { Btn } from '../../components/ui'
+import FaceEditor from '../../components/ui/FaceEditor'
+import { FOOD_PREF_OPTIONS, VIBE_TAG_OPTIONS } from '../../lib/constants'
+import { DEFAULT_FACE, normalizeFace } from '../../lib/faces'
 
 type Step = 'basic' | 'food' | 'vibe' | 'done'
 
@@ -20,8 +22,7 @@ export default function ProfileSetupScreen() {
   const [instagram, setInstagram] = useState('')
   const [snapchat, setSnapchat] = useState('')
   const [tiktok, setTiktok] = useState('')
-  const [emoji, setEmoji] = useState(user?.emoji ?? '🌶️')
-  const [tone, setTone] = useState(user?.tone ?? '#FCEAE3')
+  const [face, setFace] = useState(() => normalizeFace(user?.face ?? DEFAULT_FACE))
   const [foodPrefs, setFoodPrefs] = useState<string[]>([])
   const [vibeTags, setVibeTags] = useState<string[]>([])
   const [budget, setBudget] = useState<'$' | '$$' | '$$$'>('$$')
@@ -30,10 +31,11 @@ export default function ProfileSetupScreen() {
   const stepIndex = steps.indexOf(step)
 
   function toggleFood(tag: string) {
-    setFoodPrefs(p => p.includes(tag) ? p.filter(x => x !== tag) : [...p, tag])
+    setFoodPrefs((prev) => prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag])
   }
+
   function toggleVibe(tag: string) {
-    setVibeTags(p => p.includes(tag) ? p.filter(x => x !== tag) : [...p, tag])
+    setVibeTags((prev) => prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag])
   }
 
   async function finish() {
@@ -49,21 +51,27 @@ export default function ProfileSetupScreen() {
       foodPrefs, vibeTags, budget,
       isOnboarded: true,
     }
-    if (firebaseEnabled) {
-      await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
-    }
     dispatch({ type: 'UPDATE_CURRENT_USER', updates })
+    if (firebaseEnabled) {
+      try {
+        await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
+      } catch (e) {
+        console.error('Failed to save profile to Firestore:', e)
+      }
+    }
     navigate('/home')
   }
 
   return (
     <div className="h-full bg-paper flex flex-col">
-      {/* Progress bar */}
       <div className="px-5 pt-14 pb-4">
         <div className="flex gap-1.5">
           {steps.slice(0, -1).map((s, i) => (
-            <div key={s} className="flex-1 h-1 rounded-full transition-all duration-300"
-              style={{ background: i <= stepIndex - (step === 'done' ? 0 : 0) ? 'var(--accent)' : '#E5DFD7' }} />
+            <div
+              key={s}
+              className="flex-1 h-1 rounded-full transition-all duration-300"
+              style={{ background: i <= stepIndex ? 'var(--accent)' : '#E5DFD7' }}
+            />
           ))}
         </div>
       </div>
@@ -76,63 +84,69 @@ export default function ProfileSetupScreen() {
               <div className="text-ink-2 text-sm mt-1">Others will see this when you join their plan.</div>
             </div>
 
-            {/* Avatar picker */}
             <div>
               <div className="font-mono-sm text-ink-2 mb-2">PICK YOUR AVATAR</div>
-              <div className="flex gap-2 flex-wrap">
-                {EMOJI_OPTIONS.map((e, i) => (
-                  <button key={e} onClick={() => { setEmoji(e); setTone(TONE_OPTIONS[i % TONE_OPTIONS.length]) }}
-                    className={`transition-transform active:scale-90 ${emoji === e ? 'scale-110' : ''}`}
-                    style={{ outline: emoji === e ? '2.5px solid var(--accent)' : 'none', borderRadius: 10 }}
-                  >
-                    <Avatar emoji={e} tone={TONE_OPTIONS[i % TONE_OPTIONS.length]} />
-                  </button>
-                ))}
-              </div>
+              <FaceEditor value={face} onChange={setFace} />
             </div>
 
-            {/* Name */}
             <div>
               <div className="font-mono-sm text-ink-2 mb-1.5">NAME</div>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
                 className="w-full wk-box px-4 py-3 text-sm bg-white outline-none placeholder-ink-3"
-                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }} />
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              />
             </div>
 
-            {/* Age */}
             <div>
               <div className="font-mono-sm text-ink-2 mb-1.5">AGE (18+)</div>
-              <input value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 20" type="number" min="18" max="99"
-                className="w-full wk-box px-4 py-3 text-sm bg-white outline-none placeholder-ink-3" />
+              <input
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="e.g. 20"
+                type="number"
+                min="18"
+                max="99"
+                className="w-full wk-box px-4 py-3 text-sm bg-white outline-none placeholder-ink-3"
+              />
             </div>
 
-            {/* Bio */}
             <div>
               <div className="font-mono-sm text-ink-2 mb-1.5">BIO (OPTIONAL)</div>
-              <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="A sentence about you and what you're craving…" rows={2}
-                className="w-full wk-box px-4 py-3 text-sm bg-white outline-none resize-none placeholder-ink-3" />
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="A sentence about you and what you're craving..."
+                rows={2}
+                className="w-full wk-box px-4 py-3 text-sm bg-white outline-none resize-none placeholder-ink-3"
+              />
             </div>
 
-            {/* Socials */}
             <div>
               <div className="font-mono-sm text-ink-2 mb-2">SOCIAL HANDLES (OPTIONAL)</div>
               <div className="space-y-2">
                 {[
                   { label: 'Instagram', val: instagram, set: setInstagram, placeholder: '@yourhandle' },
-                  { label: 'Snapchat',  val: snapchat,  set: setSnapchat,  placeholder: 'yoursnap' },
-                  { label: 'TikTok',    val: tiktok,    set: setTiktok,    placeholder: '@yourtiktok' },
+                  { label: 'Snapchat', val: snapchat, set: setSnapchat, placeholder: 'yoursnap' },
+                  { label: 'TikTok', val: tiktok, set: setTiktok, placeholder: '@yourtiktok' },
                 ].map(({ label, val, set, placeholder }) => (
                   <div key={label} className="flex items-center gap-2 wk-box px-4 py-3 bg-white">
                     <span className="text-ink-2 text-xs w-16 flex-shrink-0">{label}</span>
-                    <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-                      className="flex-1 text-sm outline-none placeholder-ink-3 bg-transparent" />
+                    <input
+                      value={val}
+                      onChange={(e) => set(e.target.value)}
+                      placeholder={placeholder}
+                      className="flex-1 text-sm outline-none placeholder-ink-3 bg-transparent"
+                    />
                   </div>
                 ))}
               </div>
             </div>
 
-            <Btn variant="primary" className="w-full mt-2" onClick={() => setStep('food')} disabled={!name.trim() || !age || parseInt(age) < 18}>
-              Next →
+            <Btn variant="primary" className="w-full mt-2" onClick={() => setStep('food')} disabled={!name.trim() || !age || parseInt(age, 10) < 18}>
+              Next {'->'}
             </Btn>
           </div>
         )}
@@ -141,12 +155,14 @@ export default function ProfileSetupScreen() {
           <div className="space-y-5">
             <div>
               <div className="font-display text-3xl text-ink">What are you into?</div>
-              <div className="text-ink-2 text-sm mt-1">Pick as many as you like — we'll use these to match you.</div>
+              <div className="text-ink-2 text-sm mt-1">Pick as many as you like. We use these to match you.</div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {FOOD_PREF_OPTIONS.map(tag => (
-                <button key={tag} onClick={() => toggleFood(tag)}
+              {FOOD_PREF_OPTIONS.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleFood(tag)}
                   className={`wk-pill text-xs transition-all active:scale-95 ${foodPrefs.includes(tag) ? 'wk-pill-accent' : ''}`}
                   style={{ color: foodPrefs.includes(tag) ? '#fff' : 'var(--ink)' }}
                 >
@@ -158,9 +174,9 @@ export default function ProfileSetupScreen() {
             <div className="text-ink-3 text-xs text-center">{foodPrefs.length} selected</div>
 
             <div className="flex gap-3">
-              <Btn className="flex-1" onClick={() => setStep('basic')}>← Back</Btn>
+              <Btn className="flex-1" onClick={() => setStep('basic')}>Back</Btn>
               <Btn variant="primary" className="flex-1" onClick={() => setStep('vibe')} disabled={foodPrefs.length === 0}>
-                Next →
+                Next {'->'}
               </Btn>
             </div>
           </div>
@@ -170,14 +186,16 @@ export default function ProfileSetupScreen() {
           <div className="space-y-5">
             <div>
               <div className="font-display text-3xl text-ink">Your vibe.</div>
-              <div className="text-ink-2 text-sm mt-1">And your usual budget — you can always change this per plan.</div>
+              <div className="text-ink-2 text-sm mt-1">Set the tags and budget you usually want.</div>
             </div>
 
             <div>
               <div className="font-mono-sm text-ink-2 mb-2">VIBE TAGS</div>
               <div className="flex flex-wrap gap-2">
-                {VIBE_TAG_OPTIONS.map(tag => (
-                  <button key={tag} onClick={() => toggleVibe(tag)}
+                {VIBE_TAG_OPTIONS.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleVibe(tag)}
                     className={`wk-pill text-xs transition-all active:scale-95 ${vibeTags.includes(tag) ? 'wk-pill-accent' : ''}`}
                     style={{ color: vibeTags.includes(tag) ? '#fff' : 'var(--ink)' }}
                   >
@@ -190,24 +208,29 @@ export default function ProfileSetupScreen() {
             <div>
               <div className="font-mono-sm text-ink-2 mb-2">DEFAULT BUDGET</div>
               <div className="flex gap-2">
-                {(['$', '$$', '$$$'] as const).map(b => (
-                  <button key={b} onClick={() => setBudget(b)}
-                    className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 border`}
+                {(['$', '$$', '$$$'] as const).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => setBudget(option)}
+                    className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 border"
                     style={{
-                      borderWidth: '1.6px', borderColor: 'var(--line)',
-                      background: budget === b ? 'var(--accent)' : '#fff',
-                      color: budget === b ? '#fff' : 'var(--ink)',
-                      boxShadow: budget === b ? '2px 2px 0 var(--line)' : 'none',
+                      borderWidth: '1.6px',
+                      borderColor: 'var(--line)',
+                      background: budget === option ? 'var(--accent)' : '#fff',
+                      color: budget === option ? '#fff' : 'var(--ink)',
+                      boxShadow: budget === option ? '2px 2px 0 var(--line)' : 'none',
                     }}
-                  >{b}</button>
+                  >
+                    {option}
+                  </button>
                 ))}
               </div>
             </div>
 
             <div className="flex gap-3">
-              <Btn className="flex-1" onClick={() => setStep('food')}>← Back</Btn>
+              <Btn className="flex-1" onClick={() => setStep('food')}>Back</Btn>
               <Btn variant="primary" className="flex-1" onClick={finish}>
-                Done ✓
+                Done
               </Btn>
             </div>
           </div>

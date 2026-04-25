@@ -37,7 +37,7 @@ export default function PublicProfileCard() {
             <div className="px-4 pb-5">
               {/* Avatar overlapping banner */}
               <div className="flex items-end justify-between" style={{ marginTop: -28 }}>
-                <Avatar emoji={profile.emoji} tone={profile.tone} size="lg" />
+                <Avatar emoji={profile.emoji} tone={profile.tone} face={profile.face} size="lg" />
                 <div className="font-display text-lg text-ink-2 pb-1">{profile.reliability}% reliable</div>
               </div>
 

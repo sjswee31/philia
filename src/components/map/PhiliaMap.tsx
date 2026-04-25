@@ -92,7 +92,7 @@ function PlanPin({ plan, onClick }: { plan: Plan; onClick: () => void }) {
         <div className="flex -space-x-1.5">
           {plan.members.slice(0, 3).map(uid => {
             const u = MOCK_USERS.find(x => x.id === uid)
-            return u ? <Avatar key={uid} emoji={u.emoji} tone={u.tone} size="sm" /> : null
+            return u ? <Avatar key={uid} emoji={u.emoji} tone={u.tone} face={u.face} size="sm" /> : null
           })}
         </div>
         <span className="text-ink text-[10px]">{plan.restaurant.name.split(' ')[0]}</span>
