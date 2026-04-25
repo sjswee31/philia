@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signInWithPopup } from 'firebase/auth'
-import { auth, googleProvider } from '../../lib/firebase'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { auth, googleProvider, db, firebaseEnabled } from '../../lib/firebase'
 import { useApp } from '../../contexts/AppContext'
 import type { UserProfile } from '../../types'
 import { generateId } from '../../lib/utils'
@@ -20,6 +21,19 @@ export default function LoginScreen() {
     try {
       const result = await signInWithPopup(auth, googleProvider)
       const { user } = result
+
+      if (firebaseEnabled) {
+        // Check if profile already exists in Firestore
+        const snap = await getDoc(doc(db, 'users', user.uid))
+        if (snap.exists()) {
+          const existing = snap.data() as UserProfile
+          dispatch({ type: 'SET_CURRENT_USER', user: existing })
+          navigate(existing.isOnboarded ? '/home' : '/onboarding')
+          return
+        }
+      }
+
+      // New user — create profile
       const idx = Math.floor(Math.random() * EMOJI_OPTIONS.length)
       const profile: UserProfile = {
         id: user.uid,
@@ -41,6 +55,11 @@ export default function LoginScreen() {
         isOnboarded: false,
         createdAt: new Date().toISOString(),
       }
+
+      if (firebaseEnabled) {
+        await setDoc(doc(db, 'users', user.uid), profile)
+      }
+
       dispatch({ type: 'SET_CURRENT_USER', user: profile })
       navigate('/onboarding')
     } catch (e: unknown) {

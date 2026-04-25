@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { doc, setDoc } from 'firebase/firestore'
+import { db, firebaseEnabled } from '../../lib/firebase'
 import { useApp, useCurrentUser } from '../../contexts/AppContext'
 import { Btn } from '../../components/ui'
 import FaceEditor from '../../components/ui/FaceEditor'
@@ -36,24 +38,27 @@ export default function ProfileSetupScreen() {
     setVibeTags((prev) => prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag])
   }
 
-  function finish() {
+  async function finish() {
     if (!user) return
-    dispatch({
-      type: 'UPDATE_CURRENT_USER',
-      updates: {
-        name: name.trim() || user.name,
-        face,
-        age: age ? parseInt(age, 10) : undefined,
-        bio: bio.trim() || undefined,
-        instagram: instagram.trim() || undefined,
-        snapchat: snapchat.trim() || undefined,
-        tiktok: tiktok.trim() || undefined,
-        foodPrefs,
-        vibeTags,
-        budget,
-        isOnboarded: true,
-      },
-    })
+    const updates = {
+      name: name.trim() || user.name,
+      emoji, tone,
+      age: age ? parseInt(age) : undefined,
+      bio: bio.trim() || undefined,
+      instagram: instagram.trim() || undefined,
+      snapchat: snapchat.trim() || undefined,
+      tiktok: tiktok.trim() || undefined,
+      foodPrefs, vibeTags, budget,
+      isOnboarded: true,
+    }
+    dispatch({ type: 'UPDATE_CURRENT_USER', updates })
+    if (firebaseEnabled) {
+      try {
+        await setDoc(doc(db, 'users', user.id), { ...user, ...updates }, { merge: true })
+      } catch (e) {
+        console.error('Failed to save profile to Firestore:', e)
+      }
+    }
     navigate('/home')
   }
 

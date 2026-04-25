@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { signOut } from 'firebase/auth'
+import { auth, firebaseEnabled } from '../../lib/firebase'
 import { useCurrentUser, useApp } from '../../contexts/AppContext'
 import TabBar from '../../components/layout/TabBar'
 import { Avatar, ReliabilityRing, Pill, Chip, SectionLabel, Divider } from '../../components/ui'
@@ -51,8 +53,9 @@ export default function ProfileScreen() {
     setEditing(false)
   }
 
-  function logout() {
+  async function logout() {
     localStorage.removeItem('philia_user_profile')
+    if (firebaseEnabled) await signOut(auth)
     dispatch({ type: 'LOGOUT' })
     navigate('/login')
   }
