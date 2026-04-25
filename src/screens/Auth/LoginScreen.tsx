@@ -6,6 +6,7 @@ import { useApp } from '../../contexts/AppContext'
 import type { UserProfile } from '../../types'
 import { generateId } from '../../lib/utils'
 import { EMOJI_OPTIONS, TONE_OPTIONS } from '../../lib/constants'
+import { randomFace } from '../../lib/faces'
 
 export default function LoginScreen() {
   const navigate = useNavigate()
@@ -26,6 +27,7 @@ export default function LoginScreen() {
         photo: user.photoURL ?? '',
         emoji: EMOJI_OPTIONS[idx],
         tone: TONE_OPTIONS[idx % TONE_OPTIONS.length],
+        face: randomFace(idx),
         foodPrefs: [],
         vibeTags: [],
         budget: '$$',
@@ -57,6 +59,7 @@ export default function LoginScreen() {
       photo: '',
       emoji: EMOJI_OPTIONS[idx],
       tone: TONE_OPTIONS[idx],
+      face: randomFace(idx),
       foodPrefs: [],
       vibeTags: [],
       budget: '$$',

@@ -1,3 +1,5 @@
+import type { AvatarFaceInput } from '../lib/faces'
+
 export type BudgetTier = '$' | '$$' | '$$$'
 export type JoinSetting = 'auto' | 'approval' | 'invite'
 export type PlanStatus = 'open' | 'full' | 'in-progress' | 'closed-dms' | 'past'
@@ -8,6 +10,7 @@ export interface UserProfile {
   photo: string
   emoji: string
   tone: string
+  face?: AvatarFaceInput
   age?: number
   bio?: string
   foodPrefs: string[]

@@ -92,7 +92,7 @@ export default function MapScreen() {
             <div className="flex items-center gap-1.5 mb-3">
               {selectedPlan.members.slice(0, 4).map(uid => {
                 const u = MOCK_USERS.find(x => x.id === uid)
-                return u ? <Avatar key={uid} emoji={u.emoji} tone={u.tone} size="sm" /> : null
+                return u ? <Avatar key={uid} emoji={u.emoji} tone={u.tone} face={u.face} size="sm" /> : null
               })}
               {spotsLeft(selectedPlan) > 0 && (
                 <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold text-ink-2"
