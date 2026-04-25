@@ -4,9 +4,15 @@ import { useApp, useCurrentUser } from '../../contexts/AppContext'
 import { Avatar } from '../../components/ui'
 import { MOCK_USERS } from '../../lib/mockData'
 import { formatTime, generateId } from '../../lib/utils'
-import type { ChatMessage, Plan } from '../../types'
+import { generateMediatorResponse } from '../../lib/chatbot'
+import type { ChatMessage } from '../../types'
 
-const QUICK_REPLIES = ['🟢 still in', '🟡 running 5 min', "🔴 can't make it", 'swap contacts', 'running late', 'wrap up']
+const STARTER_PROMPTS = [
+  'I might be late',
+  'I have a concern',
+  'Can you relay this to the host?',
+  'I need to leave early',
+]
 
 export default function ChatScreen() {
   const { planId } = useParams<{ planId: string }>()
@@ -14,7 +20,9 @@ export default function ChatScreen() {
   const { state, dispatch } = useApp()
   const user = useCurrentUser()
   const bottomRef = useRef<HTMLDivElement>(null)
-  const [directMsg, setDirectMsg] = useState('')
+  const [draft, setDraft] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [statusNote, setStatusNote] = useState('')
 
   const plan = state.plans.find(p => p.id === planId)
   const msgCount = plan?.chatMessages?.length ?? 0
@@ -33,13 +41,27 @@ export default function ChatScreen() {
   const isDMMode = p.status === 'closed-dms' && !isMember
 
   const host = MOCK_USERS.find(u => u.id === p.hostId) ?? state.users.find(u => u.id === p.hostId)
-  const memberProfiles = p.members.map(id =>
-    MOCK_USERS.find(u => u.id === id) ?? state.users.find(u => u.id === id)
-  ).filter(Boolean)
+  const memberProfiles = p.members
+    .map(id => MOCK_USERS.find(u => u.id === id) ?? state.users.find(u => u.id === id))
+    .filter((member): member is NonNullable<typeof member> => Boolean(member))
 
-  function sendQuickReply(reply: string) {
-    if (reply === 'wrap up' && isHost) {
+  async function handleLocalCommand(text: string) {
+    const normalized = text.trim().toLowerCase()
+
+    if ((normalized === 'wrap up' || normalized === 'wrap up dinner') && isHost) {
       dispatch({ type: 'UPDATE_PLAN', planId: p.id, updates: { status: 'past' } })
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        planId: p.id,
+        message: {
+          id: `bot_${generateId()}`,
+          senderId: 'bot',
+          content: 'Dinner marked as wrapped up. I can still collect feedback or pass along follow-up notes.',
+          type: 'bot',
+          timestamp: new Date().toISOString(),
+        },
+      })
+
       if ('Notification' in window && Notification.permission === 'granted') {
         setTimeout(() => {
           new Notification('How was dinner? 🍽️', {
@@ -48,9 +70,11 @@ export default function ChatScreen() {
           })
         }, 60 * 60 * 1000)
       }
+
+      return true
     }
 
-    if (reply === 'swap contacts') {
+    if (normalized === 'swap contacts') {
       const botMsg: ChatMessage = {
         id: `bot_${generateId()}`,
         senderId: 'bot',
@@ -59,62 +83,133 @@ export default function ChatScreen() {
         timestamp: new Date().toISOString(),
       }
       dispatch({ type: 'ADD_CHAT_MESSAGE', planId: p.id, message: botMsg })
-      return
+      return true
     }
 
-    const userMsg: ChatMessage = {
-      id: `user_${generateId()}`,
-      senderId: u.id,
-      content: reply,
-      type: 'direct',
-      timestamp: new Date().toISOString(),
-    }
-    dispatch({ type: 'ADD_CHAT_MESSAGE', planId: p.id, message: userMsg })
+    if (normalized === '✅ accept' && isHost && p.joinRequests.length > 0) {
+      const requesterId = p.joinRequests[0]
+      const requester = state.users.find(person => person.id === requesterId) ?? MOCK_USERS.find(person => person.id === requesterId)
 
-    setTimeout(() => {
-      let botResponse = ''
-      if (reply === '🟢 still in') botResponse = `${u.name} is confirmed. ✓`
-      else if (reply === '🟡 running 5 min') botResponse = `${u.name} is running ~5 minutes late.`
-      else if (reply === "🔴 can't make it") {
-        botResponse = `${u.name} can't make it. Logged. ${p.members.length - 1}/${p.groupSize} remain.`
-      } else if (reply === 'running late') botResponse = `${u.name} says they're running late.`
-      else if (reply === 'wrap up') botResponse = `${u.name} called wrap. Rating prompts go out in 1 hour!`
-      else return
-
+      dispatch({ type: 'APPROVE_JOIN', planId: p.id, userId: requesterId })
       dispatch({
         type: 'ADD_CHAT_MESSAGE',
         planId: p.id,
-        message: { id: `bot_${generateId()}`, senderId: 'bot', content: botResponse, type: 'bot', timestamp: new Date().toISOString() },
+        message: {
+          id: `bot_${generateId()}`,
+          senderId: 'bot',
+          content: `${requester?.name ?? 'The requester'} was approved. I’ve let the group know.`,
+          type: 'bot',
+          timestamp: new Date().toISOString(),
+        },
       })
-    }, 600)
+      return true
+    }
+
+    if (normalized === '❌ decline' && isHost && p.joinRequests.length > 0) {
+      const requesterId = p.joinRequests[0]
+      const requester = state.users.find(person => person.id === requesterId) ?? MOCK_USERS.find(person => person.id === requesterId)
+
+      dispatch({ type: 'DECLINE_JOIN', planId: p.id, userId: requesterId })
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        planId: p.id,
+        message: {
+          id: `bot_${generateId()}`,
+          senderId: 'bot',
+          content: `${requester?.name ?? 'The requester'} was declined. I kept the message neutral.`,
+          type: 'bot',
+          timestamp: new Date().toISOString(),
+        },
+      })
+      return true
+    }
+
+    return false
   }
 
-  function sendDirectMsg() {
-    if (!directMsg.trim()) return
+  async function sendMessage(prefill?: string) {
+    const text = (prefill ?? draft).trim()
+    if (!text || isSending) return
+
     const msg: ChatMessage = {
       id: `dm_${generateId()}`,
       senderId: u.id,
-      content: directMsg.trim(),
+      content: text,
       type: 'direct',
       timestamp: new Date().toISOString(),
     }
     dispatch({ type: 'ADD_CHAT_MESSAGE', planId: p.id, message: msg })
-    setDirectMsg('')
+    setDraft('')
+    setStatusNote('')
 
-    if (isDMMode) {
-      setTimeout(() => {
+    if (await handleLocalCommand(text)) {
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      const ai = await generateMediatorResponse({
+        plan: p,
+        currentUser: u,
+        host: host ?? null,
+        members: memberProfiles,
+        isDMMode,
+        chatHistory: [...p.chatMessages, msg],
+        latestUserMessage: text,
+      })
+
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        planId: p.id,
+        message: {
+          id: `bot_${generateId()}`,
+          senderId: 'bot',
+          content: ai.reply,
+          type: 'bot',
+          timestamp: new Date().toISOString(),
+          quickReplies: ai.quickReplies,
+        },
+      })
+
+      if (ai.shouldRelay && ai.relayMessage) {
         dispatch({
           type: 'ADD_CHAT_MESSAGE',
           planId: p.id,
           message: {
-            id: `bot_${generateId()}`, senderId: 'bot',
-            content: 'Your message was forwarded to the host.',
-            type: 'bot', timestamp: new Date().toISOString(),
+            id: `bot_${generateId()}`,
+            senderId: 'bot',
+            content: `Relayed to ${ai.relayAudience || (isDMMode ? 'host' : 'group')}: ${ai.relayMessage}`,
+            type: 'bot',
+            timestamp: new Date().toISOString(),
           },
         })
-      }, 800)
+      }
+
+      if (ai.source === 'fallback') {
+        setStatusNote('AI is not connected yet, so the chat is using local fallback replies.')
+      }
+    } catch {
+      setStatusNote('The chatbot could not respond right now. Check your Ollama or API setup and try again.')
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        planId: p.id,
+        message: {
+          id: `bot_${generateId()}`,
+          senderId: 'bot',
+          content: 'I hit a connection issue while trying to draft that relay. Please try again in a moment.',
+          type: 'bot',
+          timestamp: new Date().toISOString(),
+        },
+      })
+    } finally {
+      setIsSending(false)
     }
   }
+
+  const suggestionChips = p.chatMessages[p.chatMessages.length - 1]?.quickReplies?.length
+    ? p.chatMessages[p.chatMessages.length - 1].quickReplies!
+    : STARTER_PROMPTS
 
   return (
     <div className="h-full bg-paper flex flex-col">
@@ -130,7 +225,7 @@ export default function ChatScreen() {
             <div className="font-semibold text-sm">{p.restaurant.name} · {formatTime(p.time)}</div>
             <div className="text-ink-2 text-xs">
               {isDMMode
-                ? `Direct to ${host?.name} · bot relayed`
+                ? `Host relay for ${host?.name} · bot mediated`
                 : `${memberProfiles.map(u => u?.name?.split(' ')[0]).join(', ')} · bot mediated`}
             </div>
           </div>
@@ -146,42 +241,90 @@ export default function ChatScreen() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {p.chatMessages.map(msg => (
-          <ChatBubble key={msg.id} msg={msg} currentUserId={u.id} onQuickReply={sendQuickReply} />
+          <ChatBubble key={msg.id} msg={msg} currentUserId={u.id} onQuickReply={sendMessage} />
         ))}
+        {isSending && (
+          <div className="flex flex-col items-start">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent-soft)', border: '1.2px solid var(--line)' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="1.8" strokeLinecap="round">
+                  <rect x="4" y="7" width="16" height="13" rx="3"/>
+                  <line x1="12" y1="3" x2="12" y2="7"/>
+                  <circle cx="9" cy="13" r="1.2" fill="var(--ink)"/>
+                  <circle cx="15" cy="13" r="1.2" fill="var(--ink)"/>
+                </svg>
+              </div>
+              <span className="text-ink-2 text-xs">philia bot</span>
+            </div>
+            <div className="px-3 py-2 rounded-2xl text-sm max-w-[80%]" style={{ background: 'var(--accent-soft)', border: '1.4px solid var(--line)' }}>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-ink-2 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-ink-2 animate-pulse [animation-delay:120ms]" />
+                <span className="w-2 h-2 rounded-full bg-ink-2 animate-pulse [animation-delay:240ms]" />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
       {/* Input area */}
       <div className="flex-shrink-0 bg-white px-4 pb-6 pt-3" style={{ borderTop: '1.4px solid var(--line)' }}>
-        {isDMMode ? (
-          <div>
-            <div className="text-ink-2 text-xs mb-2 font-mono-sm">DIRECT MESSAGE TO HOST</div>
-            <div className="flex gap-2">
-              <input value={directMsg} onChange={e => setDirectMsg(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendDirectMsg()}
-                placeholder="Message the host…"
-                className="flex-1 wk-box bg-white px-4 py-2.5 text-sm outline-none placeholder-ink-3"
-              />
-              <button onClick={sendDirectMsg} disabled={!directMsg.trim()}
-                className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-40"
-                style={{ background: 'var(--accent)', border: '1.6px solid var(--line)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><polygon points="3,3 21,12 3,21 6,12"/></svg>
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-ink-2 text-xs font-mono-sm">MESSAGE PHILIA BOT</div>
+            <div className="text-ink-3 text-[10px]">
+              {isDMMode ? 'bot relays to host' : 'bot relays to group when needed'}
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {suggestionChips.map(reply => (
+              <button
+                key={reply}
+                onClick={() => setDraft(reply)}
+                className="wk-pill text-xs flex-shrink-0 active:scale-95 transition-transform"
+              >
+                {reply}
               </button>
-            </div>
+            ))}
           </div>
-        ) : (
-          <div>
-            <div className="text-ink-2 text-xs mb-2 font-mono-sm">QUICK REPLIES</div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {QUICK_REPLIES.filter(r => r !== 'wrap up' || isHost).map(reply => (
-                <button key={reply} onClick={() => sendQuickReply(reply)}
-                  className="wk-pill text-xs flex-shrink-0 active:scale-95 transition-transform">
-                  {reply}
-                </button>
-              ))}
-            </div>
+
+          <div className="flex gap-2 items-end">
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void sendMessage()
+                }
+              }}
+              rows={3}
+              placeholder={isDMMode ? 'Tell the bot what you want relayed to the host…' : 'Tell the bot what you need, and it will relay for you…'}
+              className="flex-1 wk-box bg-white px-4 py-3 text-sm outline-none placeholder-ink-3 resize-none"
+            />
+            <button
+              onClick={() => void sendMessage()}
+              disabled={!draft.trim() || isSending}
+              className="w-11 h-11 rounded-xl flex items-center justify-center disabled:opacity-40"
+              style={{ background: 'var(--accent)', border: '1.6px solid var(--line)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                <polygon points="3,3 21,12 3,21 6,12"/>
+              </svg>
+            </button>
           </div>
-        )}
+
+          <div className="text-ink-2 text-xs mt-2">
+            Share delays, concerns, dietary notes, or anything you want passed along without direct messaging.
+          </div>
+          {statusNote && (
+            <div className="text-[11px] mt-2" style={{ color: 'var(--accent)' }}>
+              {statusNote}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
