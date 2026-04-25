@@ -1,7 +1,8 @@
 import type { UserProfile, Plan, ChatMessage } from '../types'
 import { RESTAURANTS } from './constants'
+import { randomFace } from './faces'
 
-export const MOCK_USERS: UserProfile[] = [
+const RAW_MOCK_USERS: UserProfile[] = [
   {
     id: 'u_nico', name: 'Nico T.', photo: '', emoji: '🌿', tone: '#EAE3F4',
     age: 20, bio: 'CS junior, into climbing and late-night ramen runs. Low key, always down for good food.',
@@ -203,6 +204,11 @@ export const MOCK_USERS: UserProfile[] = [
     isVerified: true, isOnboarded: true, createdAt: '2025-12-15T00:00:00Z',
   },
 ]
+
+export const MOCK_USERS: UserProfile[] = RAW_MOCK_USERS.map((user, index) => ({
+  ...user,
+  face: randomFace(index * 7 + 3),
+}))
 
 function hoursFromNow(h: number): string {
   return new Date(Date.now() + h * 60 * 60 * 1000).toISOString()
